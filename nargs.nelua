@@ -61,7 +61,7 @@ function nargs.Parser:option(long_name: string, short_name: string, desc: string
   end
 end
 
-function nargs.Parser:flag(long_name: string, short_name: string, desc: string )
+function nargs.Parser:flag(long_name: string, short_name: string, desc: string)
   mild_assert!(long_name ~= "")
   mild_assert!(not self.options:has(long_name), ("long_name '%s' has already been defined"):format(long_name))
   mild_assert!(not self.flags:has(long_name), ("long_name '%s' has already been defined"):format(long_name))
@@ -145,21 +145,23 @@ function nargs.Parser:parse(args: span(string)): hashmap(string, nargs.ParsedRes
           parse!(args, name, val, i)
         end
       end
+    else
+      mild_assert!(false, ("Unknown argument '%s'"):format(args[i]))
     end
     -- Options & flags --
-
-    -- setting defaults
-    for k, v in pairs(self.options) do
-      if not res:has(k) then
-        res[k] = nargs.ParsedResult.opt({ v.def })
-      end
-    end
-    for k, v in pairs(self.flags) do
-      if not res:has(k) then
-        res[k] = nargs.ParsedResult.flag(false)
-      end
-    end
     i = i + 1
+  end
+
+  -- setting defaults
+  for k, v in pairs(self.options) do
+    if not res:has(k) then
+      res[k] = nargs.ParsedResult.opt({ v.def })
+    end
+  end
+  for k, v in pairs(self.flags) do
+    if not res:has(k) then
+      res[k] = nargs.ParsedResult.flag(false)
+    end
   end
   return res
 end
@@ -174,19 +176,15 @@ parser:flag("help", "h")
 
 local args = parser:parse(arg)
 
-local world = args["world"]
-if world:is_flag() then
-  print(world:get_flag())
-end
+local world = args["world"]:get_flag()
+print(world)
 
-local we = args["we"]
-if we:is_flag() then
-  print(we:get_flag())
-end
+local we = args["we"]:get_flag()
+print(we)
 
-local help = args["help"]
-if help:is_flag() then
-  print(help:get_flag())
+local help = args["help"]:get_flag()
+if help then
+  print("lol")
 end
 
 -- return nargs
