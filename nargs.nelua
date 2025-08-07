@@ -32,11 +32,19 @@ local nargs.ParserFlag = @record{
   desc: string,
 }
 
+local nargs.ParserPosArg = @record{
+  name: string,
+  desc: string,
+  def: string,
+  value: string
+}
+
 local nargs.Parser = @record{
   name: string,
   desc: string,
   options: hashmap(string, nargs.ParserOption),
   flags: hashmap(string, nargs.ParserFlag),
+  pos_args: sequence(nargs.ParserPosArg),
   short_long: hashmap(string, string)
 }
 
@@ -50,10 +58,19 @@ function nargs.new(name: string, desc: string): nargs.Parser
   }
 end
 
+## local function assert_name(name)
+  local name = #[name]#
+  ## static_assert(name, "Param `name` is required")
+  mild_assert!(name ~= "")
+  mild_assert!(not self.options:has(name), ("name '%s' has already been defined"):format(name))
+  mild_assert!(not self.flags:has(name), ("name '%s' has already been defined"):format(name))
+  for _, v in ipairs(self.pos_args) do
+    mild_assert!(v.name ~= name, ("name '%s' has already been defined"):format(name))
+  end
+## end
+
 function nargs.Parser:option(long_name: string, short_name: string, desc: string, def: string)
-  mild_assert!(long_name ~= "")
-  mild_assert!(not self.options:has(long_name), ("long_name '%s' has already been defined"):format(long_name))
-  mild_assert!(not self.flags:has(long_name), ("long_name '%s' has already been defined"):format(long_name))
+  assert_name!(long_name)
   self.options[long_name] = { long_name, short_name, desc, def }
   if short_name ~= "" then
     mild_assert!(not self.short_long:has(short_name), ("short_name '%s' has already been defined"):format(short_name))
@@ -62,9 +79,7 @@ function nargs.Parser:option(long_name: string, short_name: string, desc: string
 end
 
 function nargs.Parser:flag(long_name: string, short_name: string, desc: string)
-  mild_assert!(long_name ~= "")
-  mild_assert!(not self.options:has(long_name), ("long_name '%s' has already been defined"):format(long_name))
-  mild_assert!(not self.flags:has(long_name), ("long_name '%s' has already been defined"):format(long_name))
+  assert_name!(long_name)
   self.flags[long_name] = { long_name, short_name, desc }
   if short_name ~= "" then
     mild_assert!(not self.short_long:has(short_name), ("short_name '%s' has already been defined"):format(short_name))
@@ -72,9 +87,15 @@ function nargs.Parser:flag(long_name: string, short_name: string, desc: string)
   end
 end
 
+function nargs.Parser:pos_arg(name: string, desc: string, def: string)
+  assert_name!(name)
+  self.pos_args:push({ name, desc, def })
+end
+
 local nargs.ParsedResult = @Sum(record{
   opt: sequence(string),
   flag: boolean,
+  pos_arg: string
 })
 
 ## local function parse(args, name, val, i)
@@ -82,24 +103,28 @@ local nargs.ParsedResult = @Sum(record{
   ## static_assert(name, "Param `name` is required")
   ## static_assert(val, "Param `val` is required")
   ## static_assert(i, "Param `i` is required")
-  if self.options:has(#[name]#) then
-    if #[val]# == "" then
-      local err = ("Option '%s' expects an argument"):format(#[name]#)
-      mild_assert!(# #[args]# > #[i]# + 1, err)
-      mild_assert!(not #[args]#[#[i]# + 1]:match("^-"), err)
-      #[val]# = #[args]#[#[i]# + 1]
-      if not res:has(#[name]#) then
-        res[#[name]#] = nargs.ParsedResult.opt({ #[val]# })
+  local args = #[args]#
+  local name = #[name]#
+  local val = #[val]#
+  local i = #[i]#
+  if self.options:has(name) then
+    if val == "" then
+      local err = ("Option '%s' expects an argument"):format(name)
+      mild_assert!(#args > i + 1, err)
+      mild_assert!(not args[i + 1]:match("^-"), err)
+      val = args[i + 1]
+      if not res:has(name) then
+        res[name] = nargs.ParsedResult.opt({ val })
       else
-        res[#[name]#]:get_opt():push(#[val]#)
+        res[name]:get_opt():push(val)
       end
-      #[i]# = #[i]# + 1
+      i = i + 1
     end
-  elseif self.flags:has(#[name]#) then
-    mild_assert!(#[val]# == "", ("Flag '%s' does not take values"):format(#[name]#))
-    res[#[name]#] = nargs.ParsedResult.flag(true)
+  elseif self.flags:has(name) then
+    mild_assert!(val == "", ("Flag '%s' does not take values"):format(name))
+    res[name] = nargs.ParsedResult.flag(true)
   else
-    mild_assert!(false, ("Unknown argument '%s'"):format(#[args]#[#[i]#]))
+    mild_assert!(false, ("Unknown argument '%s'"):format(args[i]))
   end
 ## end
 
@@ -107,10 +132,11 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
   local res: hashmap(string, nargs.ParsedResult)
   local extras: sequence(string)
   local i = 0
+  local pos_arg_len = 0
   while i < #args do
     -- print(args[i])
-    -- Options & flags --
     if args[i]:match("^-") then
+      -- Options & flags
       if args[i] == "--" then
         i = i + 1
         for index = i, <#args do
@@ -152,9 +178,12 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
         end
       end
     else
-      mild_assert!(false, ("Unknown argument '%s'"):format(args[i]))
+      -- Postional Arguments
+      mild_assert!(pos_arg_len < #self.pos_args, ("Unknown argument '%s'"):format(args[i]))
+      pos_arg_len = pos_arg_len + 1
+      local pos_arg = self.pos_args[pos_arg_len]
+      res[pos_arg.name] = nargs.ParsedResult.pos_arg(args[i])
     end
-    -- Options & flags --
     i = i + 1
   end
 
@@ -169,6 +198,11 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
       res[k] = nargs.ParsedResult.flag(false)
     end
   end
+  for _, v in ipairs(self.pos_args) do
+    if not res:has(v.name) then
+      res[v.name] = nargs.ParsedResult.pos_arg(v.def)
+    end
+  end
   return res, extras
 end
 
@@ -179,6 +213,7 @@ require "arg"
 parser:flag("world", "w")
 parser:flag("we", "W")
 parser:flag("help", "h")
+parser:pos_arg("test", "", "123")
 
 local args, extras = parser:parse(arg)
 
@@ -187,5 +222,7 @@ local world = args["world"]:get_flag()
 local we = args["we"]:get_flag()
 
 local help = args["help"]:get_flag()
+
+local test = args["test"]:get_pos_arg()
 
 -- return nargs
