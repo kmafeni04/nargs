@@ -2,6 +2,7 @@ require "string"
 require "sequence"
 require "os"
 require "io"
+require "memory"
 
 local Variant = require "variant-nelua.variant"
 local Sum = Variant.Sum
@@ -45,6 +46,7 @@ local nargs.Parser = @record{
   options: hashmap(string, nargs.ParserOption),
   flags: hashmap(string, nargs.ParserFlag),
   pos_args: sequence(nargs.ParserPosArg),
+  cmds: hashmap(string, nargs.Parser),
   short_long: hashmap(string, string)
 }
 
@@ -67,6 +69,7 @@ end
   for _, v in ipairs(self.pos_args) do
     mild_assert!(v.name ~= name, ("name '%s' has already been defined"):format(name))
   end
+  mild_assert!(not self.cmds:has(name), ("name '%s' has already been defined"):format(name))
 ## end
 
 function nargs.Parser:option(long_name: string, short_name: string, desc: string, def: string)
@@ -92,11 +95,27 @@ function nargs.Parser:pos_arg(name: string, desc: string, def: string)
   self.pos_args:push({ name, desc, def })
 end
 
+function nargs.Parser:cmd(name: string, desc: string): *nargs.Parser
+  assert_name!(name)
+  self.cmds[name] = {
+    name = name,
+    desc = desc
+  }
+  return &self.cmds[name]
+end
+
+local nargs.ParsedCmdResult <forwarddecl> = @record{}
+
 local nargs.ParsedResult = @Sum(record{
   opt: sequence(string),
   flag: boolean,
-  pos_arg: string
+  pos_arg: string,
+  cmd: hashmap(string, *nargs.ParsedCmdResult),
 })
+
+nargs.ParsedCmdResult = @record{
+  res: nargs.ParsedResult
+}
 
 ## local function parse(args, name, val, i)
   ## static_assert(args, "Param `args` is required")
@@ -134,7 +153,6 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
   local i = 0
   local pos_arg_len = 0
   while i < #args do
-    -- print(args[i])
     if args[i]:match("^-") then
       -- Options & flags
       if args[i] == "--" then
@@ -145,7 +163,6 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
         break
       elseif args[i]:sub(1, 2) == "--" then
         local arg = args[i]
-        print("long", arg)
         local name = arg:sub(3)
         local val: string
         local matched, matched_seq = name:match("(.+)=(.+)")
@@ -156,7 +173,6 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
         parse!(args, name, val, i)
       else
         local arg = args[i]
-        print("short", arg)
         local name = arg:sub(2)
         local val: string
         local matched, matched_seq = name:match("(.+)=(.+)")
@@ -167,16 +183,32 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
         if #name > 1 then
           mild_assert!(val == "", ("Unexpected value '%s'"):format(val))
           for n in name:gmatch("%w") do
-            local has, name = self.short_long:has_and_get(n)
+            local has, long_name = self.short_long:has_and_get(n)
             mild_assert!(has == true, ("Unknown option '-%s'"):format(n))
-            parse!(args, name, val, i)
+            parse!(args, long_name, val, i)
           end
         else
-          local has, name = self.short_long:has_and_get(name)
+          local has, long_name = self.short_long:has_and_get(name)
           mild_assert!(has == true, ("Unknown option '-%s'"):format(name))
-          parse!(args, name, val, i)
+          parse!(args, long_name, val, i)
         end
       end
+    elseif self.cmds:has(args[i]) then
+      -- Commands
+      local arg = args[i]
+      i = i + 1
+      local sub_args = args:sub(i, #args)
+      local cmd_args = self.cmds[arg]:parse(sub_args)
+      local cmd: hashmap(string, *nargs.ParsedCmdResult)
+      for k, v in pairs(cmd_args) do
+        -- NOTE: Remeber to document memory allocation
+        local cmd_res: *nargs.ParsedCmdResult = new(nargs.ParsedCmdResult)
+        local x: nargs.ParsedCmdResult = { v }
+        memory.copy(cmd_res, &x, #nargs.ParsedCmdResult)
+        cmd[k] = cmd_res
+      end
+      res[arg] = nargs.ParsedResult.cmd(cmd)
+      break
     else
       -- Postional Arguments
       mild_assert!(pos_arg_len < #self.pos_args, ("Unknown argument '%s'"):format(args[i]))
@@ -203,7 +235,33 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
       res[v.name] = nargs.ParsedResult.pos_arg(v.def)
     end
   end
+  for k, v in pairs(self.cmds) do
+    if not res:has(k) then
+      res[k] = nargs.ParsedResult.cmd({})
+    end
+  end
   return res, extras
+end
+
+function nargs.destroy_args(args: hashmap(string, nargs.ParsedResult))
+  for k, v in pairs(args) do
+    if v:is_opt() then
+      v:get_opt():destroy()
+    elseif v:is_flag() then
+      args[k] = nargs.ParsedResult.flag(false)
+    elseif v:is_pos_arg() then
+      args[k] = nargs.ParsedResult.pos_arg("")
+    elseif v:is_cmd() then
+      local cmd = v:get_cmd()
+      for i, j in pairs(cmd) do
+        if j then
+          delete(j)
+        end
+      end
+      cmd:destroy()
+    end
+  end
+  args:destroy()
 end
 
 local parser = nargs.new()
@@ -215,14 +273,33 @@ parser:flag("we", "W")
 parser:flag("help", "h")
 parser:pos_arg("test", "", "123")
 
+local first = parser:cmd("first")
+first:flag("help", "h")
+local second = first:cmd("second")
+second:flag("test", "t")
+second:flag("help", "h")
+
 local args, extras = parser:parse(arg)
 
 local world = args["world"]:get_flag()
+print(world)
 
 local we = args["we"]:get_flag()
+print(we)
 
 local help = args["help"]:get_flag()
+print(help)
 
 local test = args["test"]:get_pos_arg()
+print(test)
+
+local first = args["first"]:get_cmd()
+local first_help = first["help"].res:get_flag()
+print(first_help)
+local second = first["second"].res:get_cmd()
+local second_test = second["test"].res:get_flag()
+print(second_test)
+
+nargs.destroy_args(args)
 
 -- return nargs
