@@ -1,0 +1,27 @@
+local ssdg = require "ssdg.ssdg"
+
+local gen = ssdg.new{
+  lang = "lua",
+  lead = "-",
+  single_line = "--",
+  multi_line = {
+    starting = "--[[",
+    ending = "]]"
+  }
+}
+
+local subs: hashmap(string, string)
+subs["lang"] = gen.conf.lang
+
+gen:add([[# nargs
+A command line argument parser for nelua
+
+## Quick Start
+-- TODO
+
+## Reference
+]], { subs = subs })
+
+gen:add_file("./nargs.nelua", { subs = subs })
+
+gen:write_file("README.md")

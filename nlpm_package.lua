@@ -15,6 +15,11 @@ return {
       repo = "https://github.com/kmafeni04/variant-nelua",
       version = "#c1dbeb2a1daa86d88a38deb24416b66149161e65",
     },
+    {
+      name = "ssdg",
+      repo = "https://github.com/kmafeni04/ssdg",
+      version = "#9e1fb58f183ae7efea98d25a40d6d1bf38f483af",
+    },
   },
   scripts = {},
 }

@@ -1,3 +1,6 @@
+-- TODO: Handle printing help
+-- TRY: Improve sub command api
+
 require "string"
 require "sequence"
 require "os"
@@ -16,7 +19,10 @@ local Sum = Variant.Sum
   end
 ## end
 
+--- nargs
+---`
 local nargs = @record{}
+---`
 
 -- NOTE: Should probably handle the length of expected argument values
 local nargs.ParserOption = @record{
@@ -117,7 +123,7 @@ nargs.ParsedCmdResult = @record{
   res: nargs.ParsedResult
 }
 
-## local function parse(args, name, val, i)
+## local function parse_option_or_arg(args, name, val, i)
   ## static_assert(args, "Param `args` is required")
   ## static_assert(name, "Param `name` is required")
   ## static_assert(val, "Param `val` is required")
@@ -170,7 +176,7 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
           name = matched_seq[1]
           val = matched_seq[2]
         end
-        parse!(args, name, val, i)
+        parse_option_or_arg!(args, name, val, i)
       else
         local arg = args[i]
         local name = arg:sub(2)
@@ -185,12 +191,12 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
           for n in name:gmatch("%w") do
             local has, long_name = self.short_long:has_and_get(n)
             mild_assert!(has == true, ("Unknown option '-%s'"):format(n))
-            parse!(args, long_name, val, i)
+            parse_option_or_arg!(args, long_name, val, i)
           end
         else
           local has, long_name = self.short_long:has_and_get(name)
           mild_assert!(has == true, ("Unknown option '-%s'"):format(name))
-          parse!(args, long_name, val, i)
+          parse_option_or_arg!(args, long_name, val, i)
         end
       end
     elseif self.cmds:has(args[i]) then
@@ -294,11 +300,16 @@ local test = args["test"]:get_pos_arg()
 print(test)
 
 local first = args["first"]:get_cmd()
-local first_help = first["help"].res:get_flag()
-print(first_help)
-local second = first["second"].res:get_cmd()
-local second_test = second["test"].res:get_flag()
-print(second_test)
+local first_help_ptr = first["help"]
+if first_help_ptr then
+  local first_help = first_help_ptr.res:get_flag()
+  local second = first["second"].res:get_cmd()
+  local second_test_ptr = second["test"]
+  if second_test_ptr then
+    local second_test = second["test"].res:get_flag()
+    print(second_test)
+  end
+end
 
 nargs.destroy_args(args)
 
