@@ -21,5 +21,8 @@ return {
       version = "#9e1fb58f183ae7efea98d25a40d6d1bf38f483af",
     },
   },
-  scripts = {},
+  scripts = {
+    docs = "nelua --cc=tcc nargs-doc.nelua",
+    test = "nelua --cc=tcc test.nelua",
+  },
 }

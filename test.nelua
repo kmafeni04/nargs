@@ -1,0 +1,11 @@
+local nargs = require ".nargs"
+
+require "arg"
+
+do
+  local parser = nargs.new()
+
+  local args = parser:parse()
+
+  nargs.destroy_args(args)
+end
