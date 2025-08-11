@@ -161,7 +161,7 @@ nargs.ParsedCmdResult = @record{
         res[_name] = nargs.ParsedResult.opt({ _val })
       else
         local opt = res[_name]:get_opt()
-        mild_assert!(#opt <= self.options[_name].len, ("Too many values for '--%s'"):format("_name"))
+        mild_assert!(#opt <= self.options[_name].len, ("Too many values for Option '%s'"):format(_name))
         opt:push(_val)
       end
       _i = _i + 1
@@ -295,46 +295,4 @@ function nargs.destroy_args(args: hashmap(string, nargs.ParsedResult))
   args:destroy()
 end
 
-local parser = nargs.new()
-
-require "arg"
-
-parser:flag("world", "w")
-parser:option("we", "W", "", "", "*")
-parser:flag("help", "h")
-parser:pos_arg("test", "", "123")
-
-local first = parser:cmd("first")
-first:flag("help", "h")
-local second = first:cmd("second")
-second:flag("test", "t")
-second:flag("help", "h")
-
-local args, extras = parser:parse(arg)
-
-local world = args["world"]:get_flag()
-print(world)
-
-local we = args["we"]:get_opt()
-
-local help = args["help"]:get_flag()
-print(help)
-
-local test = args["test"]:get_pos_arg()
-print(test)
-
-local first = args["first"]:get_cmd()
-local first_help_ptr = first["help"]
-if first_help_ptr then
-  local first_help = first_help_ptr.res:get_flag()
-  local second = first["second"].res:get_cmd()
-  local second_test_ptr = second["test"]
-  if second_test_ptr then
-    local second_test = second["test"].res:get_flag()
-    print(second_test)
-  end
-end
-
-nargs.destroy_args(args)
-
--- return nargs
+return nargs
