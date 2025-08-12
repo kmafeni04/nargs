@@ -4,8 +4,37 @@ require "arg"
 
 do
   local parser = nargs.new()
+  parser:pos_arg("test", "", "", nargs.MAX_ARG_LEN)
 
-  local args = parser:parse()
+  local args = parser:parse({ "hello" })
+
+  local test = args["test"]:get_pos_arg()
+  assert(test[1] == "hello")
 
   nargs.destroy_args(args)
 end
+
+do
+  local parser = nargs.new()
+  parser:pos_arg("input", "Input file")
+  parser:opt("output", "o", "Output file", "a.out", 1)
+  parser:opt("include", "I", "Include locations", "", nargs.MAX_ARG_LEN)
+
+  local args = parser:parse()
+
+  local args = parser:parse({ "foo", "-I=/usr/local/include", "--include=src", "-o", "bar" })
+
+  local input = args["input"]:get_pos_arg()
+  assert(input[1] == "foo")
+
+  local output = args["output"]:get_opt()
+  assert(output[1] == "bar")
+
+  local include = args["include"]:get_opt()
+  assert(include[1] == "/usr/local/include")
+  assert(include[2] == "src")
+
+  nargs.destroy_args(args)
+end
+
+print("All tests pass")

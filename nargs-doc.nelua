@@ -17,11 +17,40 @@ gen:add([[# nargs
 A command line argument parser for nelua
 
 ## Quick Start
--- TODO
+```:lang:
+local nargs = require "nargs"
 
+local parser = nargs.new()
+parser:pos_arg("input", "Input file")
+parser:opt("output", "o", "Output file", "a.out", 1)
+parser:opt("include", "I", "Include locations", "", nargs.MAX_ARG_LEN)
+
+local args = parser:parse()
+
+local args = parser:parse({ "foo", "-I=/usr/local/include", "--include=src", "-o", "bar" })
+
+local input = args["input"]:get_pos_arg()
+print(input[1]) -- foo
+
+local output = args["output"]:get_opt()
+print(output[1]) -- bar
+
+local include = args["include"]:get_opt()
+print(include[1], include[2]) -- /usr/local/include src
+
+nargs.destroy_args(args)
+```
 ## Reference
+
 ]], { subs = subs })
 
 gen:add_file("./nargs.nelua", { subs = subs })
+
+gen:add([[
+## Acknowledgement
+- [argparse](https://github.com/mpeterv/argparse)
+- [flag.h](https://github.com/tsoding/flag.h)
+- [arrr](https://github.com/DarkWiiPlayer/arrr)
+]], { subs = subs })
 
 gen:write_file("README.md")
