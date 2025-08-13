@@ -111,19 +111,19 @@ function nargs.new(conf: nargs.Parser): nargs.Parser
 ### nargs.Parser:opt
 
 ```lua
-function nargs.Parser:opt(conf: nargs.ParserOpt): *nargs.ParserOpt
+function nargs.Parser:opt(conf: nargs.ParserOpt)
 ```
 
 ### nargs.Parser:flag
 
 ```lua
-function nargs.Parser:flag(conf: nargs.ParserFlag): *nargs.ParserFlag
+function nargs.Parser:flag(conf: nargs.ParserFlag)
 ```
 
 ### nargs.Parser:pos_arg
 
 ```lua
-function nargs.Parser:pos_arg(conf: nargs.ParserPosArg): *nargs.ParserPosArg
+function nargs.Parser:pos_arg(conf: nargs.ParserPosArg)
 ```
 
 ### nargs.Parser:cmd

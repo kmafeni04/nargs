@@ -102,7 +102,7 @@ end
 
 --- ### nargs.Parser:opt
 ---`
-function nargs.Parser:opt(conf: nargs.ParserOpt): *nargs.ParserOpt
+function nargs.Parser:opt(conf: nargs.ParserOpt)
 ---`
   conf.long_name = conf.long_name:gsub("^%-%-", "")
   assert_name!(conf.long_name)
@@ -114,12 +114,11 @@ function nargs.Parser:opt(conf: nargs.ParserOpt): *nargs.ParserOpt
     mild_assert!(not self.short_long:has(conf.short_name), ("short_name '%s' has already been defined"):format(conf.short_name))
     self.short_long[conf.short_name] = conf.long_name
   end
-  return &self.opts[conf.long_name]
 end
 
 --- ### nargs.Parser:flag
 ---`
-function nargs.Parser:flag(conf: nargs.ParserFlag): *nargs.ParserFlag
+function nargs.Parser:flag(conf: nargs.ParserFlag)
 ---`
   conf.long_name = conf.long_name:gsub("^%-%-", "")
   assert_name!(conf.long_name)
@@ -130,17 +129,15 @@ function nargs.Parser:flag(conf: nargs.ParserFlag): *nargs.ParserFlag
     mild_assert!(not self.short_long:has(conf.short_name), ("short_name '%s' has already been defined"):format(conf.short_name))
     self.short_long[conf.short_name] = conf.long_name
   end
-  return &self.flags[conf.long_name]
 end
 
 --- ### nargs.Parser:pos_arg
 ---`
-function nargs.Parser:pos_arg(conf: nargs.ParserPosArg): *nargs.ParserPosArg
+function nargs.Parser:pos_arg(conf: nargs.ParserPosArg)
 ---`
   assert_name!(conf.name)
   if conf.max_len <= 0 then conf.max_len = 1 else conf.max_len = conf.max_len end
   self.pos_args:push(conf)
-  return &self.pos_args[#self.pos_args]
 end
 
 --- ### nargs.Parser:cmd
