@@ -1,4 +1,4 @@
--- TODO: Handle printing help
+-- TODO: Handle parser mutex groups
 -- TRY: Improve sub command api
 
 require "string"
@@ -29,12 +29,13 @@ local nargs = @record{}
 local nargs.MAX_ARG_LEN: integer <const> = 9223372036854775807 -- INT64_MAX
 ---`
 
---- ### nargs.ParserOption
+--- ### nargs.ParserOpt
 ---`
-local nargs.ParserOption = @record{
+local nargs.ParserOpt = @record{
   long_name: string,
   short_name: string,
-  desc: string,
+  placeholder: string,
+  help: string,
   def: string,
   max_len: integer,
   values: sequence(string),
@@ -46,7 +47,7 @@ local nargs.ParserOption = @record{
 local nargs.ParserFlag = @record{
   long_name: string,
   short_name: string,
-  desc: string,
+  help: string,
 }
 ---`
 
@@ -54,9 +55,10 @@ local nargs.ParserFlag = @record{
 ---`
 local nargs.ParserPosArg = @record{
   name: string,
-  desc: string,
+  help: string,
   def: string,
   max_len: integer,
+  optional: boolean,
   values: sequence(string),
 }
 ---`
@@ -66,7 +68,8 @@ local nargs.ParserPosArg = @record{
 local nargs.Parser = @record{
   name: string,
   desc: string,
-  options: hashmap(string, nargs.ParserOption),
+  help: string,
+  opts: hashmap(string, nargs.ParserOpt),
   flags: hashmap(string, nargs.ParserFlag),
   pos_args: sequence(nargs.ParserPosArg),
   cmds: hashmap(string, nargs.Parser),
@@ -76,22 +79,20 @@ local nargs.Parser = @record{
 
 --- ### nargs.new
 ---`
-function nargs.new(name: string, desc: string): nargs.Parser
+function nargs.new(conf: nargs.Parser): nargs.Parser
 ---`
-  if name == "" then
-    name = #[srcloc.srcname]#
+  if conf.name == "" then
+    conf.name = #[srcloc.srcname]#
   end
-  return {
-    name = name,
-    desc = desc
-  }
+  return conf
 end
 
 ## local function assert_name(name)
   ## static_assert(name, "Param `name` is required")
   local name = #[name]#
-  mild_assert!(name ~= "")
-  mild_assert!(not self.options:has(name), ("name '%s' has already been defined"):format(name))
+  mild_assert!(name ~= "", "name cannot be an empty string")
+  mild_assert!(name ~= "help", "name cannot be 'help'")
+  mild_assert!(not self.opts:has(name), ("name '%s' has already been defined"):format(name))
   mild_assert!(not self.flags:has(name), ("name '%s' has already been defined"):format(name))
   for _, v in ipairs(self.pos_args) do
     mild_assert!(v.name ~= name, ("name '%s' has already been defined"):format(name))
@@ -101,51 +102,54 @@ end
 
 --- ### nargs.Parser:opt
 ---`
-function nargs.Parser:opt(long_name: string, short_name: string, desc: string, def: string, max_len: integer)
+function nargs.Parser:opt(conf: nargs.ParserOpt): *nargs.ParserOpt
 ---`
-  long_name = long_name:gsub("^%-%-", "")
-  if max_len <= 0 then max_len = 1 else max_len = max_len end
-  self.options[long_name] = { long_name, short_name, desc, def, max_len }
-  if short_name ~= "" then
-    short_name = short_name:gsub("^%-", "")
-    mild_assert!(not self.short_long:has(short_name), ("short_name '%s' has already been defined"):format(short_name))
-    self.short_long[short_name] = long_name
+  conf.long_name = conf.long_name:gsub("^%-%-", "")
+  assert_name!(conf.long_name)
+  if conf.max_len <= 0 then conf.max_len = 1 else conf.max_len = conf.max_len end
+  self.opts[conf.long_name] = conf
+  if conf.short_name ~= "" then
+    conf.short_name = conf.short_name:gsub("^%-", "")
+    mild_assert!(conf.short_name ~= "h", "short_name cannot be 'h'")
+    mild_assert!(not self.short_long:has(conf.short_name), ("short_name '%s' has already been defined"):format(conf.short_name))
+    self.short_long[conf.short_name] = conf.long_name
   end
+  return &self.opts[conf.long_name]
 end
 
 --- ### nargs.Parser:flag
 ---`
-function nargs.Parser:flag(long_name: string, short_name: string, desc: string)
+function nargs.Parser:flag(conf: nargs.ParserFlag): *nargs.ParserFlag
 ---`
-  long_name = long_name:gsub("^%-%-", "")
-  assert_name!(long_name)
-  self.flags[long_name] = { long_name, short_name, desc }
-  if short_name ~= "" then
-    short_name = short_name:gsub("^%-", "")
-    mild_assert!(not self.short_long:has(short_name), ("short_name '%s' has already been defined"):format(short_name))
-    self.short_long[short_name] = long_name
+  conf.long_name = conf.long_name:gsub("^%-%-", "")
+  assert_name!(conf.long_name)
+  self.flags[conf.long_name] = conf
+  if conf.short_name ~= "" then
+    conf.short_name = conf.short_name:gsub("^%-", "")
+    mild_assert!(conf.short_name ~= "h", "short_name cannot be 'h'")
+    mild_assert!(not self.short_long:has(conf.short_name), ("short_name '%s' has already been defined"):format(conf.short_name))
+    self.short_long[conf.short_name] = conf.long_name
   end
+  return &self.flags[conf.long_name]
 end
 
 --- ### nargs.Parser:pos_arg
 ---`
-function nargs.Parser:pos_arg(name: string, desc: string, def: string, max_len: integer)
+function nargs.Parser:pos_arg(conf: nargs.ParserPosArg): *nargs.ParserPosArg
 ---`
-  assert_name!(name)
-  if max_len <= 0 then max_len = 1 else max_len = max_len end
-  self.pos_args:push({ name, desc, def, max_len })
+  assert_name!(conf.name)
+  if conf.max_len <= 0 then conf.max_len = 1 else conf.max_len = conf.max_len end
+  self.pos_args:push(conf)
+  return &self.pos_args[#self.pos_args]
 end
 
 --- ### nargs.Parser:cmd
 ---`
-function nargs.Parser:cmd(name: string, desc: string): *nargs.Parser
+function nargs.Parser:cmd(conf: nargs.Parser): *nargs.Parser
 ---`
-  assert_name!(name)
-  self.cmds[name] = {
-    name = name,
-    desc = desc
-  }
-  return &self.cmds[name]
+  assert_name!(conf.name)
+  self.cmds[conf.name] = conf
+  return &self.cmds[conf.name]
 end
 
 local nargs.ParsedCmdResult <forwarddecl> = @record{}
@@ -176,7 +180,7 @@ nargs.ParsedCmdResult = @record{
   local _name = #[name]#
   local _val = #[val]#
   local _i = #[i]#
-  if self.options:has(_name) then
+  if self.opts:has(_name) then
     if _val == "" then
       local err = ("Option '%s' expects an argument"):format(_name)
       mild_assert!(#_args > _i + 1, err)
@@ -188,7 +192,7 @@ nargs.ParsedCmdResult = @record{
       res[_name] = nargs.ParsedResult.opt({ _val })
     else
       local opt = res[_name]:get_opt()
-      mild_assert!(#opt <= self.options[_name].max_len, ("Too many values for Option '%s'"):format(_name))
+      mild_assert!(#opt <= self.opts[_name].max_len, ("Too many values for Option '%s'"):format(_name))
       opt:push(_val)
     end
   elseif self.flags:has(_name) then
@@ -202,6 +206,140 @@ nargs.ParsedCmdResult = @record{
   #|val.name|# = _val
   #|i.name|# = _i
 ## end
+
+--- ### nargs.Parser:get_help
+---`
+function nargs.Parser:get_help(): string
+---`
+  local sb: stringbuilder
+  local col_len = #("-h, --help")
+  sb:writef("Usage: %s [-h]", self.name)
+  for _, opt in pairs(self.opts) do
+    sb:writef(" [")
+    local len: integer
+    if opt.short_name ~= "" then
+      len = #("-") + #opt.short_name + #(", ") + #("--") + #opt.long_name
+      sb:writef("-%s", opt.short_name)
+    else
+      len = #("--") + #opt.long_name
+      sb:writef("--%s", opt.long_name)
+    end
+    if opt.placeholder ~= "" then
+      len = len + #(" ") + #opt.placeholder
+      sb:writef(" %s", opt.placeholder)
+    end
+    if len > col_len then col_len = len end
+    sb:writef("]")
+  end
+  for _, flag in pairs(self.flags) do
+    local len: integer
+    sb:writef(" [")
+    if flag.short_name ~= "" then
+      len = #flag.short_name + #(", ") + #flag.long_name
+      sb:writef("-%s", flag.short_name)
+    else
+      len = #flag.long_name
+      sb:writef("--%s", flag.long_name)
+    end
+    if len > col_len then col_len = len end
+    sb:writef("]")
+  end
+  if #self.cmds > 0 then
+    sb:write(" <command>")
+    for _, cmd in pairs(self.cmds) do
+      local len: integer
+      len = #cmd.name
+      if len > col_len then col_len = len end
+    end
+  end
+  for _, pos_arg in ipairs(self.pos_args) do
+    local len: integer
+    len = #pos_arg.name
+    if len > col_len then col_len = len end
+    sb:write(" ")
+    sb:write(pos_arg.optional and "[" or "<")
+    sb:write(pos_arg.name)
+    sb:write(pos_arg.optional and "]" or ">")
+  end
+  sb:write(" ...\n\n")
+  if self.desc ~= "" then
+    sb:writef("%s\n\n", self.desc)
+  end
+
+  if #self.pos_args > 0 then
+    sb:write("Aguments:\n")
+    for _, pos_arg in ipairs(self.pos_args) do
+      sb:writef("  %s", pos_arg.name)
+      sb:writef(" %s%s", string.rep(" ", col_len - #pos_arg.name), pos_arg.help)
+      sb:write("\n")
+    end
+    sb:write("\n")
+  end
+
+  if #self.opts > 0 then
+    sb:write("Options:\n")
+    for _, opt in pairs(self.opts) do
+      sb:write("  ")
+      local len: integer
+      if opt.short_name ~= "" then
+        local s = ("-%s, --%s"):format(opt.short_name, opt.long_name)
+        sb:write(s)
+        len = #s
+      else
+        local s = ("--%s"):format(opt.long_name)
+        sb:writef(s)
+        len = #s
+      end
+      if opt.placeholder ~= "" then
+        len = len + #(" ") + #opt.placeholder
+        sb:writef(" %s", opt.placeholder)
+      end
+      sb:writef(" %s%s", string.rep(" ", col_len - len), opt.help)
+      sb:write("\n")
+    end
+    sb:write("\n")
+  end
+
+  if #self.flags > 0 then
+    sb:write("Flags:\n")
+    for _, flag in pairs(self.flags) do
+      sb:write("  ")
+      local len: integer
+      if flag.short_name ~= "" then
+        local s = ("-%s, --%s"):format(flag.short_name, flag.long_name)
+        sb:write(s)
+        len = #s
+      else
+        local s = ("--%s"):format(flag.long_name)
+        sb:writef(s)
+        len = #s
+      end
+      sb:writef(" %s%s", string.rep(" ", col_len - len), flag.help)
+      sb:write("\n")
+    end
+    sb:write("\n")
+  end
+
+  if #self.cmds > 0 then
+    sb:write("Commands:\n")
+    for _, cmd in pairs(self.cmds) do
+      sb:writef("  %s", cmd.name)
+      sb:writef(" %s%s", string.rep(" ", col_len - #cmd.name), cmd.help)
+      sb:write("\n")
+    end
+    sb:write("\n")
+  end
+  sb:rollback(1)
+
+  return sb:promote()
+end
+
+--- ### nargs.Parser:print_help
+---`
+function nargs.Parser:print_help()
+---`
+  io.write(self:get_help())
+end
 
 --- ### nargs.Parser:parse
 ---`
@@ -220,6 +358,9 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
           extras:push(args[i])
         end
         break
+      elseif args[i] == "-h" or args[i] == "--help" then
+        self:print_help()
+        os.exit(0)
       elseif args[i]:sub(1, 2) == "--" then
         local arg = args[i]
         local name = arg:sub(3)
@@ -287,7 +428,7 @@ function nargs.Parser:parse(args: span(string)): (hashmap(string, nargs.ParsedRe
   end
 
   -- Setting defaults
-  for k, v in pairs(self.options) do
+  for k, v in pairs(self.opts) do
     if not res:has(k) then
       res[k] = nargs.ParsedResult.opt({ v.def })
     end

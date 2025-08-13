@@ -16,14 +16,25 @@ subs["lang"] = gen.conf.lang
 gen:add([[# nargs
 A command line argument parser for nelua
 
+## How to install
+
+Add to your [nlpm](https://github.com/kmafeni04/nlpm) package dependencies
+```lua
+{
+  name = "nargs",
+  repo = "https://github.com/kmafeni04/nargs",
+  version = "COMMIT-HASH-OR-TAG",
+},
+```
+
 ## Quick Start
 ```:lang:
 local nargs = require "nargs"
 
 local parser = nargs.new()
-parser:pos_arg("input", "Input file")
-parser:opt("output", "o", "Output file", "a.out", 1)
-parser:opt("include", "I", "Include locations", "", nargs.MAX_ARG_LEN)
+parser:pos_arg({ "input", "Input file" })
+parser:opt({ "output", "o", "Output file", "a.out", max_len = 1 })
+parser:opt({ "include", "I", "Include locations", max_len = nargs.MAX_ARG_LEN })
 
 local args = parser:parse()
 

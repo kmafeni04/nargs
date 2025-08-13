@@ -4,7 +4,7 @@ require "arg"
 
 do
   local parser = nargs.new()
-  parser:pos_arg("test", "", "", nargs.MAX_ARG_LEN)
+  parser:pos_arg({ name = "test", max_len = nargs.MAX_ARG_LEN })
 
   local args = parser:parse({ "hello" })
 
@@ -16,11 +16,9 @@ end
 
 do
   local parser = nargs.new()
-  parser:pos_arg("input", "Input file")
-  parser:opt("output", "o", "Output file", "a.out", 1)
-  parser:opt("include", "I", "Include locations", "", nargs.MAX_ARG_LEN)
-
-  local args = parser:parse()
+  parser:pos_arg({ "input", "Input file" })
+  parser:opt({ "output", "o", "Output file", "a.out", max_len = 1 })
+  parser:opt({ "include", "I", "Include locations", max_len = nargs.MAX_ARG_LEN })
 
   local args = parser:parse({ "foo", "-I=/usr/local/include", "--include=src", "-o", "bar" })
 
@@ -35,6 +33,38 @@ do
   assert(include[2] == "src")
 
   nargs.destroy_args(args)
+end
+
+do
+  local parser = nargs.new({ "nargs", "A command line argument parser for nelua" })
+  parser:opt({ "test1", "t", "<test_val>", help = "Test 1 Option" })
+  parser:opt({ "test2", "T", help = "Test 2 Option" })
+  parser:opt({ "test3", help = "Test 3 option" })
+  parser:flag({ "hello", "H", help = "Flag" })
+  parser:cmd({ "cmd", help = "Command"})
+  parser:pos_arg({ "arg", help = "Positional Arg" })
+
+  local expected =[[Usage: nargs [-h] [-t <test_val>] [-T] [--test3] [-H] <command> <arg> ...
+
+A command line argument parser for nelua
+
+Aguments:
+  arg                    Positional Arg
+
+Options:
+  -t, --test1 <test_val> Test 1 Option
+  -T, --test2            Test 2 Option
+  --test3                Test 3 option
+
+Flags:
+  -H, --hello            Flag
+
+Commands:
+  cmd                    Command
+]]
+
+  local result = parser:get_help()
+  assert(expected == result)
 end
 
 print("All tests pass")

@@ -1,14 +1,25 @@
 # nargs
 A command line argument parser for nelua
 
+## How to install
+
+Add to your [nlpm](https://github.com/kmafeni04/nlpm) package dependencies
+```lua
+{
+  name = "nargs",
+  repo = "https://github.com/kmafeni04/nargs",
+  version = "COMMIT-HASH-OR-TAG",
+},
+```
+
 ## Quick Start
 ```lua
 local nargs = require "nargs"
 
 local parser = nargs.new()
-parser:pos_arg("input", "Input file")
-parser:opt("output", "o", "Output file", "a.out", 1)
-parser:opt("include", "I", "Include locations", "", nargs.MAX_ARG_LEN)
+parser:pos_arg({ "input", "Input file" })
+parser:opt({ "output", "o", "Output file", "a.out", max_len = 1 })
+parser:opt({ "include", "I", "Include locations", max_len = nargs.MAX_ARG_LEN })
 
 local args = parser:parse()
 
@@ -39,13 +50,14 @@ local nargs = @record{}
 local nargs.MAX_ARG_LEN: integer <const> = 9223372036854775807 -- INT64_MAX
 ```
 
-### nargs.ParserOption
+### nargs.ParserOpt
 
 ```lua
-local nargs.ParserOption = @record{
+local nargs.ParserOpt = @record{
   long_name: string,
   short_name: string,
-  desc: string,
+  placeholder: string,
+  help: string,
   def: string,
   max_len: integer,
   values: sequence(string),
@@ -58,7 +70,7 @@ local nargs.ParserOption = @record{
 local nargs.ParserFlag = @record{
   long_name: string,
   short_name: string,
-  desc: string,
+  help: string,
 }
 ```
 
@@ -67,9 +79,10 @@ local nargs.ParserFlag = @record{
 ```lua
 local nargs.ParserPosArg = @record{
   name: string,
-  desc: string,
+  help: string,
   def: string,
   max_len: integer,
+  optional: boolean,
   values: sequence(string),
 }
 ```
@@ -80,7 +93,8 @@ local nargs.ParserPosArg = @record{
 local nargs.Parser = @record{
   name: string,
   desc: string,
-  options: hashmap(string, nargs.ParserOption),
+  help: string,
+  opts: hashmap(string, nargs.ParserOpt),
   flags: hashmap(string, nargs.ParserFlag),
   pos_args: sequence(nargs.ParserPosArg),
   cmds: hashmap(string, nargs.Parser),
@@ -91,31 +105,31 @@ local nargs.Parser = @record{
 ### nargs.new
 
 ```lua
-function nargs.new(name: string, desc: string): nargs.Parser
+function nargs.new(conf: nargs.Parser): nargs.Parser
 ```
 
 ### nargs.Parser:opt
 
 ```lua
-function nargs.Parser:opt(long_name: string, short_name: string, desc: string, def: string, max_len: integer)
+function nargs.Parser:opt(conf: nargs.ParserOpt): *nargs.ParserOpt
 ```
 
 ### nargs.Parser:flag
 
 ```lua
-function nargs.Parser:flag(long_name: string, short_name: string, desc: string)
+function nargs.Parser:flag(conf: nargs.ParserFlag): *nargs.ParserFlag
 ```
 
 ### nargs.Parser:pos_arg
 
 ```lua
-function nargs.Parser:pos_arg(name: string, desc: string, def: string, max_len: integer)
+function nargs.Parser:pos_arg(conf: nargs.ParserPosArg): *nargs.ParserPosArg
 ```
 
 ### nargs.Parser:cmd
 
 ```lua
-function nargs.Parser:cmd(name: string, desc: string): *nargs.Parser
+function nargs.Parser:cmd(conf: nargs.Parser): *nargs.Parser
 ```
 
 ### nargs.ParsedResult
@@ -135,6 +149,18 @@ local nargs.ParsedResult = @Sum(record{
 nargs.ParsedCmdResult = @record{
   res: nargs.ParsedResult
 }
+```
+
+### nargs.Parser:get_help
+
+```lua
+function nargs.Parser:get_help(): string
+```
+
+### nargs.Parser:print_help
+
+```lua
+function nargs.Parser:print_help()
 ```
 
 ### nargs.Parser:parse
